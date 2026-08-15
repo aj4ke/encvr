@@ -71,7 +71,7 @@ bool radio_reset(void) {
     gpio_config(&reset_gpio_conf);
     
     //set the timer low for 100ms
-    setup_timer();
+    setup_pulse_timer();
     pulse_low(RADIO_RESET_PIN, 100);
 
     // monitor the uart tx pin via a serial buffer

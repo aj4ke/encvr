@@ -10,7 +10,7 @@ static void timer_callback(void* arg) {
     gpio_set_level(pulse_pin, 1);
 }
 
-void setup_timer(void) {
+void setup_pulse_timer(void) {
     if (pulse_timer != NULL) {
         return;
     }

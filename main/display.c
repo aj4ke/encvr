@@ -32,7 +32,7 @@ void display_init(void) {
     i2c_master_bus_handle_t bus_handle;
     ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus_handle));
 
-    // Wraps the I2C bus in the panel IO interface the display driver expects
+    // Wraps the I2C bus in the panel IO interface
     esp_lcd_panel_io_i2c_config_t io_config = {
         .dev_addr = OLED_I2C_ADDR,
         .control_phase_bytes = 1,
@@ -44,7 +44,7 @@ void display_init(void) {
     esp_lcd_panel_io_handle_t io_handle = NULL;
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(bus_handle, &io_config, &io_handle));
 
-    // Configures the SSD1306 panel driver itself
+    // Configures the SSD1306 panel driver
     esp_lcd_panel_ssd1306_config_t ssd1306_config = {
         .height = OLED_HEIGHT,
     };
@@ -61,11 +61,11 @@ void display_init(void) {
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
-    // Starts LVGL's tick timer, refresh task, and locking
+    // Starts LVGL tick timer, refresh task, and locking
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
 
-    // Registers the panel with LVGL as a display it can render to
+    // Registers the panel with LVGL
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = io_handle,
         .panel_handle = panel_handle,
@@ -112,5 +112,13 @@ void display_text(const char *text) {
         lv_anim_set_repeat_delay(&anim, 1000);
         lv_anim_start(&anim);
     }
+    lvgl_port_unlock();
+}
+
+void clear_screen(void) {
+    lvgl_port_lock(0);
+    lv_anim_del(message_label, NULL);
+    lv_obj_set_pos(message_label, 0, 0);
+    lv_label_set_text(message_label, "");
     lvgl_port_unlock();
 }
