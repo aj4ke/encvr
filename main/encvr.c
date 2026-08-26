@@ -34,7 +34,7 @@ void vATaskFunction(void *pvParameters){
     display_text(status_text);
 
     for(;;){
-        bool interrupt = button_was_pressed();
+        bool interrupt = button_press();
         if (interrupt) {
             display_text("1");
             vTaskDelay(pdMS_TO_TICKS(500));

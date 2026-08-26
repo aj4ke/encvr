@@ -6,4 +6,4 @@
 #define BUTTON_GPIO_PIN GPIO_NUM_23
 
 void button_init(void);
-bool button_was_pressed(void);
+bool button_press(void);

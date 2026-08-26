@@ -20,7 +20,7 @@ void button_init(void) {
     gpio_isr_handler_add(BUTTON_GPIO_PIN, btn_interrupt, NULL);
 }
 
-bool button_was_pressed(void) {
+bool button_press(void) {
     bool pressed = btn_flag;
     btn_flag = false;
     return pressed;
