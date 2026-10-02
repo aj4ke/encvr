@@ -1,2 +1,2 @@
 # encvr
-Encrypted Transciver for both ESP32 and STM32
+Encrypted Transciver for ESP32
