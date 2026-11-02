@@ -83,6 +83,3 @@ bool radio_reset(void) {
     
     return resp_exists == NULL ? false : true;
 }
-
-
-// TODO: make helper function for reading the uart buffer so I don't gotta repeat ts logic 
