@@ -10,18 +10,48 @@
 #define RADIO_RESET_PIN GPIO_NUM_18
 
 typedef enum {
-    RADIO_STATUS_WORK_MODE     = 1,
-    RADIO_STATUS_BAUD_RATE     = 2,
-    RADIO_STATUS_FREQUENCY     = 3,
-    RADIO_STATUS_PARAMETERS    = 4,
-    RADIO_STATUS_ADDRESS_ID    = 5,
-    RADIO_STATUS_NETWORK_ID    = 6,
-    RADIO_STATUS_PASSWORD      = 7,
-    RADIO_STATUS_OUTPUT_POWER  = 8,
-    RADIO_STATUS_LAST_DATA     = 9,
-    RADIO_STATUS_MODEL_ID      = 10,
-    RADIO_STATUS_FIRMWARE_VER  = 11
+    RADIO_STATUS_WORK_MODE = 0,
+    RADIO_STATUS_BAUD_RATE,
+    RADIO_STATUS_FREQUENCY,
+    RADIO_STATUS_PARAMETERS,
+    RADIO_STATUS_ADDRESS_ID,
+    RADIO_STATUS_NETWORK_ID,
+    RADIO_STATUS_PASSWORD,
+    RADIO_STATUS_OUTPUT_POWER,
+    RADIO_STATUS_LAST_TX_DATA,
+    RADIO_STATUS_MODEL_ID,
+    RADIO_STATUS_FIRMWARE_VER
 } RadioStatusID_t;
+
+static const char *const AT_cmds[] = {
+    [RADIO_STATUS_WORK_MODE]    = "AT+MODE?\r\n",
+    [RADIO_STATUS_BAUD_RATE]    = "AT+IPR?\r\n",
+    [RADIO_STATUS_FREQUENCY]    = "AT+BAND?\r\n",
+    [RADIO_STATUS_PARAMETERS]   = "AT+PARAMETER?\r\n",
+    [RADIO_STATUS_ADDRESS_ID]   = "AT+ADDRESS?\r\n",
+    [RADIO_STATUS_NETWORK_ID]   = "AT+NETWORKID?\r\n",
+    [RADIO_STATUS_PASSWORD]     = "AT+CPIN?\r\n",
+    [RADIO_STATUS_OUTPUT_POWER] = "AT+CRFOP?\r\n",
+    [RADIO_STATUS_LAST_TX_DATA] = "AT+SEND?\r\n",
+    [RADIO_STATUS_MODEL_ID]     = "AT+UID?\r\n",
+    [RADIO_STATUS_FIRMWARE_VER] = "AT+VER?\r\n"
+};
+
+typedef enum {
+    ERR_MISSING_ENTER        = 1,
+    ERR_MISSING_HEAD         = 2,
+    ERR_UNKNOWN_CMD          = 4,
+    ERR_LEN_MISMATCH         = 5,
+    ERR_TX_OVER              = 10,
+    ERR_CRC                  = 12,
+    ERR_TX_EXCEED            = 13,
+    ERR_FAIL_WRITE_FLASH     = 14,
+    ERR_UNKNOWN              = 15,
+    ERR_TX_INCOMPLETE        = 17,
+    ERR_PREAMBLE_NOT_ALLOWED = 18,
+    ERR_RX_FAIL              = 19,
+    ERR_PS_FAIL              = 20
+} RadioErrCode_t;
 
 typedef struct {
     uint16_t address; //address of sender
@@ -35,7 +65,10 @@ typedef struct {
 void radio_init(void);
 
 // Queries the radio for the current value of a setting
-void radio_get_status(char *buf, size_t buf_len, RadioStatusID_t status);
+bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t status);
+
+// Sets a specific setting based on the AT command passed 
+//bool radio_set_setting(char *buf, size_t buf_len, RadioCmdID_t command);
 
 // Sets all settings to default on the RYLR998 returns bool for success 
 bool radio_set_default(void);

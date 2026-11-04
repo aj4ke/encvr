@@ -1,10 +1,10 @@
 #include "radio.h"
 #include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
-#include "esp_log.h"
 #include "timer.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 static const gpio_config_t reset_gpio_conf = {
     .pin_bit_mask = (1ULL << RADIO_RESET_PIN),
@@ -29,28 +29,48 @@ void radio_init(void) {
     ESP_ERROR_CHECK(uart_driver_install(RADIO_UART_PORT, 256, 0, 0, NULL, 0));
 }
 
-void radio_get_status(char *buf, size_t buf_len, RadioStatusID_t status) {
-    //TODO: Add support for the other status read IDs
-    const char *cmd = "AT+BAND?\r\n";
-    uart_write_bytes(RADIO_UART_PORT, cmd, strlen(cmd));
+bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t cmd) {
+    // to get the prefix skip the first two chars and then append '=' to the end. 
+    const char *command = AT_cmds[cmd];
+
+    uart_write_bytes(RADIO_UART_PORT, command, strlen(command));
     char reply[64];
     int len = uart_read_bytes(RADIO_UART_PORT, (uint8_t *)reply, sizeof(reply) - 1, pdMS_TO_TICKS(500));
     reply[len > 0 ? len : 0] = '\0';
-    const char *prefix = "+BAND=";
-    char *band = strstr(reply, prefix);
-    if (band) {
-        band += strlen(prefix);
-        char *end = strpbrk(band, "\r\n");
-        if (end) {
-            *end = '\0';
+    
+    char response_prefix[16];
+    size_t j = 0; 
+    for(size_t i = 2; command[i] != '\0'; i++){
+        if(strchr("?\r\n", command[i]) == NULL){
+            response_prefix[j++] = command[i];
         }
     }
-    strncpy(buf, band ? band : "", buf_len - 1);
+    response_prefix[j++] = '=';
+    response_prefix[j] = '\0';
+    
+    buf[0] = '\0';
+
+    // AT guide shows AT+NETWORKID? replying +NETWORK=
+    const char *match = cmd == RADIO_STATUS_NETWORK_ID ? "+NETWORK=" : response_prefix;
+    char *value = strstr(reply, match);
+    if (!value) {
+        return false;
+    }
+    value += strlen(match);
+
+    // no line ending then the reply got cut off
+    char *end = strpbrk(value, "\r\n");
+    if (!end) {
+        return false;
+    }
+    *end = '\0';
+
+    strncpy(buf, value, buf_len - 1);
     buf[buf_len - 1] = '\0';
+    return true;
 }
 
 bool radio_set_default(void){
-    const char* TAG = "__response__";
     const char *cmd = "AT+FACTORY\r\n";
 
     uart_write_bytes(RADIO_UART_PORT, cmd, strlen(cmd));
@@ -59,14 +79,12 @@ bool radio_set_default(void){
 
     response[len > 0 ? len : 0] = '\0';
     const char *expected_response = "+FACTORY\r\n";
-    ESP_LOGI(TAG, "%s : %d\n,",response, len);
     char *resp_exists = strstr(response, expected_response);
 
     return resp_exists == NULL ? false : true;
 }
 
 bool radio_reset(void) {
-    const char* TAG = "__response__";
     static char response[9]; // +READY\r\n -> 8 chars + 1 for null terminator
     gpio_config(&reset_gpio_conf);
     
@@ -78,8 +96,26 @@ bool radio_reset(void) {
     int len = uart_read_bytes(RADIO_UART_PORT, (uint8_t *)response, sizeof(response) - 1, pdMS_TO_TICKS(500));
     response[len > 0 ? len : 0] = '\0';
     const char *expected_response = "+READY\r\n";
-    ESP_LOGI(TAG, "%s : %d\n,",response, len);
     char *resp_exists = strstr(response, expected_response);
     
     return resp_exists == NULL ? false : true;
+}
+
+const char* get_error_string(RadioErrCode_t err){
+    switch(err) {
+        case ERR_MISSING_ENTER:        return "There is not “enter” or 0x0D 0x0A in the end of the AT Command.";
+        case ERR_MISSING_HEAD:         return "The head of AT command is not “AT” string.";
+        case ERR_UNKNOWN_CMD:          return "Unknown command.";
+        case ERR_LEN_MISMATCH:         return "The data to be sent does not match the actual length";
+        case ERR_TX_OVER:              return "TX is over times.";
+        case ERR_CRC:                  return "CRC error.";
+        case ERR_TX_EXCEED:            return "TX data exceeds 240bytes.";
+        case ERR_FAIL_WRITE_FLASH:     return "Failed to write flash memory.";
+        case ERR_UNKNOWN:              return "Unknown failure.";
+        case ERR_TX_INCOMPLETE:        return "Last TX was not complete";
+        case ERR_PREAMBLE_NOT_ALLOWED: return "Preamble value is not allowed.";
+        case ERR_RX_FAIL:              return "RX failed, Header error.";
+        case ERR_PS_FAIL:              return "The time setting value of the “Smart receiving power saving mode” is not allowed.";
+        default:                       return "Unknown error code.";
+    }
 }
