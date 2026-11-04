@@ -7,6 +7,7 @@
 #include "button.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "pot.h"
 
 static const char *TAG = "app_main";
 
@@ -14,6 +15,7 @@ void vATaskFunction(void *pvParameters){
     display_init();
     radio_init();
     button_init();
+    pot_init();
 
     bool default_ok = radio_set_default();
     ESP_LOGI(TAG, "radio_set_default: %s", default_ok ? "ok" : "failed");
@@ -41,9 +43,10 @@ void vATaskFunction(void *pvParameters){
             display_text(status_text);
         }
         vTaskDelay(pdMS_TO_TICKS(10));
+        ESP_LOGI(TAG, "idx: %d", pot_get_index(5));
     }
 }
 
 void app_main(void) {
-    xTaskCreate(vATaskFunction, "button_task", 2048, NULL, 5, NULL);
+    xTaskCreate(vATaskFunction, "button_task", 4096, NULL, 5, NULL);
 }
