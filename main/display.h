@@ -7,3 +7,7 @@ void display_init(void);
 void display_text(const char *text);
 
 void clear_screen(void);
+
+void display_show_splash();
+
+void display_hide_splash();
