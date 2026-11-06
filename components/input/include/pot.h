@@ -1,7 +1,4 @@
 #pragma once
-#include "driver/gpio.h"
-
-#define POT_GPIO_PIN GPIO_NUM_4
 
 // Brings up the potentiometer, configs unit and channel
 void pot_init(void); 

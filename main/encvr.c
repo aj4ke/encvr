@@ -1,12 +1,10 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "display.h"
-#include "radio.h"
-#include "button.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "button.h"
+#include "display.h"
 #include "pot.h"
+#include "radio.h"
 
 void vATaskFunction(void *pvParameters){
     display_init();

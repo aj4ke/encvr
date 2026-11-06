@@ -1,12 +1,6 @@
 #pragma once
 #include <stddef.h>
-#include "driver/gpio.h"
-
-#define RADIO_UART_PORT UART_NUM_1
-#define RADIO_TXD_PIN   17
-#define RADIO_RXD_PIN   16
-#define RADIO_BAUD_RATE 115200
-#define RADIO_RESET_PIN GPIO_NUM_18
+#include <stdint.h>
 
 typedef enum {
     RADIO_STATUS_WORK_MODE = 0,
@@ -21,36 +15,6 @@ typedef enum {
     RADIO_STATUS_MODEL_ID,
     RADIO_STATUS_FIRMWARE_VER
 } RadioStatusID_t;
-
-static const char *const AT_cmds[] = {
-    [RADIO_STATUS_WORK_MODE]    = "AT+MODE?\r\n",
-    [RADIO_STATUS_BAUD_RATE]    = "AT+IPR?\r\n",
-    [RADIO_STATUS_FREQUENCY]    = "AT+BAND?\r\n",
-    [RADIO_STATUS_PARAMETERS]   = "AT+PARAMETER?\r\n",
-    [RADIO_STATUS_ADDRESS_ID]   = "AT+ADDRESS?\r\n",
-    [RADIO_STATUS_NETWORK_ID]   = "AT+NETWORKID?\r\n",
-    [RADIO_STATUS_PASSWORD]     = "AT+CPIN?\r\n",
-    [RADIO_STATUS_OUTPUT_POWER] = "AT+CRFOP?\r\n",
-    [RADIO_STATUS_LAST_TX_DATA] = "AT+SEND?\r\n",
-    [RADIO_STATUS_MODEL_ID]     = "AT+UID?\r\n",
-    [RADIO_STATUS_FIRMWARE_VER] = "AT+VER?\r\n"
-};
-
-typedef enum {
-    ERR_MISSING_ENTER        = 1,
-    ERR_MISSING_HEAD         = 2,
-    ERR_UNKNOWN_CMD          = 4,
-    ERR_LEN_MISMATCH         = 5,
-    ERR_TX_OVER              = 10,
-    ERR_CRC                  = 12,
-    ERR_TX_EXCEED            = 13,
-    ERR_FAIL_WRITE_FLASH     = 14,
-    ERR_UNKNOWN              = 15,
-    ERR_TX_INCOMPLETE        = 17,
-    ERR_PREAMBLE_NOT_ALLOWED = 18,
-    ERR_RX_FAIL              = 19,
-    ERR_PS_FAIL              = 20
-} RadioErrCode_t;
 
 typedef struct {
     uint16_t address; //address of sender

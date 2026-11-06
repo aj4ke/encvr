@@ -1,11 +1,11 @@
 #include "display.h"
 #include "driver/i2c_master.h"
+#include "esp_err.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
-#include "esp_lcd_panel_vendor.h"
 #include "esp_lcd_panel_ssd1306.h"
-#include "lvgl.h"
 #include "esp_lvgl_port.h"
+#include "lvgl.h"
 #include "splash.h"
 
 #define OLED_SDA 21

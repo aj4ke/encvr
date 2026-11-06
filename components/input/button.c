@@ -1,5 +1,9 @@
 #include "button.h"
-#include "display.h"
+#include "driver/gpio.h"
+#include "esp_attr.h"
+#include "esp_intr_types.h"
+
+#define BUTTON_GPIO_PIN GPIO_NUM_23
 
 static volatile bool btn_flag = false;
 

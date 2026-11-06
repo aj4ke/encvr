@@ -1,6 +1,9 @@
+#include "pot.h"
+#include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_err.h"
-#include "pot.h"
+
+#define POT_GPIO_PIN GPIO_NUM_4
 
 static adc_oneshot_unit_handle_t pot_handle;
 static adc_channel_t pot_channel;

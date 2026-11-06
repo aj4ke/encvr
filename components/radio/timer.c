@@ -1,7 +1,7 @@
-#include "esp_timer.h"
-#include "esp_err.h"
-#include "driver/gpio.h"
 #include "timer.h"
+#include "driver/gpio.h"
+#include "esp_err.h"
+#include "esp_timer.h"
 
 static esp_timer_handle_t pulse_timer;
 static gpio_num_t pulse_pin;

@@ -1,3 +1,2 @@
-idf_component_register(SRCS "pot.c" "button.c" "display.c" "radio.c" "timer.c" "encvr.c"
-                    INCLUDE_DIRS "."
-                    REQUIRES esp_driver_gpio esp_driver_uart esp_adc)
+idf_component_register(SRCS "encvr.c"
+                    INCLUDE_DIRS ".")
