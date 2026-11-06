@@ -1,6 +1,5 @@
 #pragma once
 #include <stddef.h>
-#include <stdbool.h>
 #include "driver/gpio.h"
 
 #define RADIO_UART_PORT UART_NUM_1
@@ -65,13 +64,13 @@ typedef struct {
 void radio_init(void);
 
 // Queries the radio for the current value of a setting
-bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t status);
+bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t status, const char **err);
 
 // Sets a specific setting based on the AT command passed 
 //bool radio_set_setting(char *buf, size_t buf_len, RadioCmdID_t command);
 
 // Sets all settings to default on the RYLR998 returns bool for success 
-bool radio_set_default(void);
+bool radio_set_default(const char **err);
 
 // Resets the RYLR998 via its reset GPIO pin returns bool for success
 bool radio_reset(void);

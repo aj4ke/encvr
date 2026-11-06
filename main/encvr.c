@@ -15,18 +15,21 @@ void vATaskFunction(void *pvParameters){
     button_init();
     pot_init();
 
-    bool default_ok = radio_set_default();
-    bool reset_ok = radio_reset();
+    const char *default_err = NULL;
+    const char *band_err = NULL;
 
+    bool default_ok = radio_set_default(&default_err);
+    bool reset_ok = radio_reset();
     char band[32];
-    radio_get_status(band, sizeof(band), RADIO_STATUS_FREQUENCY);
+
+    radio_get_status(band, sizeof(band), RADIO_STATUS_FREQUENCY, &band_err);
 
     char status_text[128];
-    snprintf(status_text, sizeof(status_text),
-        "Default: %s\nReset: %s\nBand: %s",
-        default_ok ? "OK" : "Err",
-        reset_ok ? "OK" : "Err",
-        band[0] ? band : "n/a");
+    snprintf(status_text, sizeof(status_text), "Default: %s\nReset: %s\nBand: %s",
+        default_ok ? "OK" : default_err,
+        reset_ok ? "OK" : "err",
+        band[0] ? band : band_err
+        );
 
     char screen_text[sizeof(status_text) + 16];
     int last_index = -1;

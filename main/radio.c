@@ -24,15 +24,36 @@ void radio_init(void) {
         .source_clk = UART_SCLK_DEFAULT
     };
     ESP_ERROR_CHECK(uart_param_config(RADIO_UART_PORT, &uart_config));
-    ESP_ERROR_CHECK(uart_set_pin(RADIO_UART_PORT, RADIO_TXD_PIN, RADIO_RXD_PIN,
-        UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(uart_set_pin(RADIO_UART_PORT, RADIO_TXD_PIN, RADIO_RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     ESP_ERROR_CHECK(uart_driver_install(RADIO_UART_PORT, 256, 0, 0, NULL, 0));
 }
 
-bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t cmd) {
+static const char* error_check(char* reply){
+    if(strncmp(reply, "+ERR=", 5) != 0){
+        return "Unknown error occured.";
+    }
+
+    switch(atoi(reply + 5)) {
+        case ERR_MISSING_ENTER:        return "There is not 'enter' or 0x0D 0x0A in the end of the AT Command.";
+        case ERR_MISSING_HEAD:         return "The head of AT command is not “AT” string.";
+        case ERR_UNKNOWN_CMD:          return "Unknown command.";
+        case ERR_LEN_MISMATCH:         return "The data to be sent does not match the actual length";
+        case ERR_TX_OVER:              return "TX is over times.";
+        case ERR_CRC:                  return "CRC error.";
+        case ERR_TX_EXCEED:            return "TX data exceeds 240bytes.";
+        case ERR_FAIL_WRITE_FLASH:     return "Failed to write flash memory.";
+        case ERR_UNKNOWN:              return "Unknown failure.";
+        case ERR_TX_INCOMPLETE:        return "Last TX was not complete";
+        case ERR_PREAMBLE_NOT_ALLOWED: return "Preamble value is not allowed.";
+        case ERR_RX_FAIL:              return "RX failed, Header error.";
+        case ERR_PS_FAIL:              return "The time setting value of the “Smart receiving power saving mode” is not allowed.";
+        default:                       return "Unknown error code.";
+    }
+}
+
+bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t cmd, const char **err) {
     // to get the prefix skip the first two chars and then append '=' to the end. 
     const char *command = AT_cmds[cmd];
-
     uart_write_bytes(RADIO_UART_PORT, command, strlen(command));
     char reply[64];
     int len = uart_read_bytes(RADIO_UART_PORT, (uint8_t *)reply, sizeof(reply) - 1, pdMS_TO_TICKS(500));
@@ -51,9 +72,16 @@ bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t cmd) {
     buf[0] = '\0';
 
     // AT guide shows AT+NETWORKID? replying +NETWORK=
-    const char *match = cmd == RADIO_STATUS_NETWORK_ID ? "+NETWORK=" : response_prefix;
+    const char *match; 
+    if (cmd == RADIO_STATUS_NETWORK_ID){
+        match = "+NETWORK=";
+    }else{
+        match = response_prefix;
+    }
+
     char *value = strstr(reply, match);
     if (!value) {
+        *err = error_check(reply);
         return false;
     }
     value += strlen(match);
@@ -61,6 +89,7 @@ bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t cmd) {
     // no line ending then the reply got cut off
     char *end = strpbrk(value, "\r\n");
     if (!end) {
+        *err = "Incomplete response.";
         return false;
     }
     *end = '\0';
@@ -70,7 +99,7 @@ bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t cmd) {
     return true;
 }
 
-bool radio_set_default(void){
+bool radio_set_default(const char **err){
     const char *cmd = "AT+FACTORY\r\n";
 
     uart_write_bytes(RADIO_UART_PORT, cmd, strlen(cmd));
@@ -81,10 +110,14 @@ bool radio_set_default(void){
     const char *expected_response = "+FACTORY\r\n";
     char *resp_exists = strstr(response, expected_response);
 
-    return resp_exists == NULL ? false : true;
+    if (!resp_exists) {
+        *err = error_check(response);
+        return false;
+    }
+    return true;
 }
 
-bool radio_reset(void) {
+bool radio_reset() {
     static char response[9]; // +READY\r\n -> 8 chars + 1 for null terminator
     gpio_config(&reset_gpio_conf);
     
@@ -98,24 +131,7 @@ bool radio_reset(void) {
     const char *expected_response = "+READY\r\n";
     char *resp_exists = strstr(response, expected_response);
     
+    // replace this with a timeout check or something 
+    // reset will never return an error
     return resp_exists == NULL ? false : true;
-}
-
-const char* get_error_string(RadioErrCode_t err){
-    switch(err) {
-        case ERR_MISSING_ENTER:        return "There is not “enter” or 0x0D 0x0A in the end of the AT Command.";
-        case ERR_MISSING_HEAD:         return "The head of AT command is not “AT” string.";
-        case ERR_UNKNOWN_CMD:          return "Unknown command.";
-        case ERR_LEN_MISMATCH:         return "The data to be sent does not match the actual length";
-        case ERR_TX_OVER:              return "TX is over times.";
-        case ERR_CRC:                  return "CRC error.";
-        case ERR_TX_EXCEED:            return "TX data exceeds 240bytes.";
-        case ERR_FAIL_WRITE_FLASH:     return "Failed to write flash memory.";
-        case ERR_UNKNOWN:              return "Unknown failure.";
-        case ERR_TX_INCOMPLETE:        return "Last TX was not complete";
-        case ERR_PREAMBLE_NOT_ALLOWED: return "Preamble value is not allowed.";
-        case ERR_RX_FAIL:              return "RX failed, Header error.";
-        case ERR_PS_FAIL:              return "The time setting value of the “Smart receiving power saving mode” is not allowed.";
-        default:                       return "Unknown error code.";
-    }
 }
