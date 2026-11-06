@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "esp_log.h"
 #include "display.h"
 #include "radio.h"
 #include "button.h"
@@ -9,23 +8,18 @@
 #include "freertos/task.h"
 #include "pot.h"
 
-static const char *TAG = "app_main";
-
 void vATaskFunction(void *pvParameters){
     display_init();
+    display_show_splash();
     radio_init();
     button_init();
     pot_init();
 
     bool default_ok = radio_set_default();
-    ESP_LOGI(TAG, "radio_set_default: %s", default_ok ? "ok" : "failed");
-
     bool reset_ok = radio_reset();
-    ESP_LOGI(TAG, "radio_reset: %s", reset_ok ? "ok" : "failed");
 
     char band[32];
     radio_get_status(band, sizeof(band), RADIO_STATUS_FREQUENCY);
-    ESP_LOGI(TAG, "radio_get_status (band): %s", band);
 
     char status_text[128];
     snprintf(status_text, sizeof(status_text),
@@ -33,17 +27,26 @@ void vATaskFunction(void *pvParameters){
         default_ok ? "OK" : "Err",
         reset_ok ? "OK" : "Err",
         band[0] ? band : "n/a");
-    display_text(status_text);
+
+    char screen_text[sizeof(status_text) + 16];
+    int last_index = -1;
+    display_hide_splash();
 
     for(;;){
         bool interrupt = button_press();
         if (interrupt) {
             display_text("1");
             vTaskDelay(pdMS_TO_TICKS(500));
-            display_text(status_text);
+            last_index = -1;
+        }
+
+        int index = pot_get_index(5);
+        if (index != last_index) {
+            snprintf(screen_text, sizeof(screen_text), "%s\nPot: %d", status_text, index);
+            display_text(screen_text);
+            last_index = index;
         }
         vTaskDelay(pdMS_TO_TICKS(10));
-        ESP_LOGI(TAG, "idx: %d", pot_get_index(5));
     }
 }
 

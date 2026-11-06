@@ -1,4 +1,4 @@
-#include "display.h"    
+#include "display.h"
 #include "driver/i2c_master.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
@@ -6,6 +6,7 @@
 #include "esp_lcd_panel_ssd1306.h"
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
+#include "splash.h"
 
 #define OLED_SDA 21
 #define OLED_SCL 22
@@ -14,6 +15,7 @@
 #define OLED_HEIGHT 64
 
 static lv_obj_t *message_label;
+static lv_obj_t *splash_img;
 
 static void set_label_y(void *label, int32_t y) {
     lv_obj_set_y((lv_obj_t *)label, (lv_coord_t)y);
@@ -84,7 +86,22 @@ void display_init(void) {
 
     lvgl_port_lock(0);
     message_label = lv_label_create(lv_disp_get_scr_act(disp));
+    lv_label_set_text(message_label, "");
     lv_obj_align(message_label, LV_ALIGN_TOP_LEFT, 0, 0);
+    lvgl_port_unlock();
+}
+
+void display_show_splash(void) {
+    lvgl_port_lock(0);
+    splash_img = lv_img_create(lv_scr_act());
+    lv_img_set_src(splash_img, &splash_dsc);
+    lv_obj_center(splash_img);
+    lvgl_port_unlock();
+}
+
+void display_hide_splash(void) {
+    lvgl_port_lock(0);
+    lv_obj_del(splash_img);
     lvgl_port_unlock();
 }
 
