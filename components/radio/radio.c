@@ -1,6 +1,8 @@
 #include "radio.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "esp_err.h"
@@ -13,35 +15,53 @@
 #define RADIO_BAUD_RATE 115200
 #define RADIO_RESET_PIN GPIO_NUM_18
 
+typedef struct {
+    const char *name;
+    const char *set_fmt;
+} at_cmd_info_t;
+
+static const at_cmd_info_t at_cmds[RADIO_CMD_COUNT] = {
+#define X(id, name, fmt) [id] = { name, fmt },
+    RADIO_CMD_T(X)
+#undef X
+};
+
+#define RADIO_ERR_T(X)                                                     \
+    X(ERR_MISSING_ENTER,        1,  "Missing \\r\\n at end of command.")   \
+    X(ERR_MISSING_HEAD,         2,  "Command does not start with AT.")     \
+    X(ERR_UNKNOWN_CMD,          4,  "Unknown command.")                    \
+    X(ERR_LEN_MISMATCH,         5,  "Data length does not match.")         \
+    X(ERR_TX_OVER,              10, "TX is over times.")                   \
+    X(ERR_CRC,                  12, "CRC error.")                          \
+    X(ERR_TX_EXCEED,            13, "TX data exceeds 240 bytes.")          \
+    X(ERR_FAIL_WRITE_FLASH,     14, "Failed to write flash memory.")       \
+    X(ERR_UNKNOWN,              15, "Unknown failure.")                    \
+    X(ERR_TX_INCOMPLETE,        17, "Last TX was not complete.")           \
+    X(ERR_PREAMBLE_NOT_ALLOWED, 18, "Preamble value is not allowed.")      \
+    X(ERR_RX_FAIL,              19, "RX failed, header error.")            \
+    X(ERR_PS_FAIL,              20, "Power saving time value not allowed.")
+
 typedef enum {
-    ERR_MISSING_ENTER        = 1,
-    ERR_MISSING_HEAD         = 2,
-    ERR_UNKNOWN_CMD          = 4,
-    ERR_LEN_MISMATCH         = 5,
-    ERR_TX_OVER              = 10,
-    ERR_CRC                  = 12,
-    ERR_TX_EXCEED            = 13,
-    ERR_FAIL_WRITE_FLASH     = 14,
-    ERR_UNKNOWN              = 15,
-    ERR_TX_INCOMPLETE        = 17,
-    ERR_PREAMBLE_NOT_ALLOWED = 18,
-    ERR_RX_FAIL              = 19,
-    ERR_PS_FAIL              = 20
+#define X(name, code, msg) name = code,
+    RADIO_ERR_T(X)
+#undef X
 } RadioErrCode_t;
 
-static const char *const AT_cmds[] = {
-    [RADIO_STATUS_WORK_MODE]    = "AT+MODE?\r\n",
-    [RADIO_STATUS_BAUD_RATE]    = "AT+IPR?\r\n",
-    [RADIO_STATUS_FREQUENCY]    = "AT+BAND?\r\n",
-    [RADIO_STATUS_PARAMETERS]   = "AT+PARAMETER?\r\n",
-    [RADIO_STATUS_ADDRESS_ID]   = "AT+ADDRESS?\r\n",
-    [RADIO_STATUS_NETWORK_ID]   = "AT+NETWORKID?\r\n",
-    [RADIO_STATUS_PASSWORD]     = "AT+CPIN?\r\n",
-    [RADIO_STATUS_OUTPUT_POWER] = "AT+CRFOP?\r\n",
-    [RADIO_STATUS_LAST_TX_DATA] = "AT+SEND?\r\n",
-    [RADIO_STATUS_MODEL_ID]     = "AT+UID?\r\n",
-    [RADIO_STATUS_FIRMWARE_VER] = "AT+VER?\r\n"
-};
+static const char *radio_err_str(int code)
+{
+    switch (code) {
+#define X(name, num, msg) case num: return msg;
+    RADIO_ERR_T(X)
+#undef X
+    default: return "Unknown error code.";
+    }
+}
+
+static const char *error_check(const char *reply)
+{
+    if (strncmp(reply, "+ERR=", 5) != 0) return "Unknown error occurred.";
+    return radio_err_str(atoi(reply + 5));
+}
 
 static const gpio_config_t reset_gpio_conf = {
     .pin_bit_mask = (1ULL << RADIO_RESET_PIN),
@@ -65,78 +85,75 @@ void radio_init(void) {
     ESP_ERROR_CHECK(uart_driver_install(RADIO_UART_PORT, 256, 0, 0, NULL, 0));
 }
 
-static const char* error_check(char* reply){
-    if(strncmp(reply, "+ERR=", 5) != 0){
-        return "Unknown error occured.";
-    }
+void radio_send_cmd(const char **resp, const char **err, bool args, at_cmd_t cmd, ...) {
+    static char reply[MAX_PAYLOAD_LEN + 32];
+    char command[MAX_PAYLOAD_LEN + 32];
+    char prefix[16];
+    const at_cmd_info_t *info = &at_cmds[cmd];
+    bool expect_ok = args || info->name[0] == '\0';
+    int len;
 
-    switch(atoi(reply + 5)) {
-        case ERR_MISSING_ENTER:        return "There is not 'enter' or 0x0D 0x0A in the end of the AT Command.";
-        case ERR_MISSING_HEAD:         return "The head of AT command is not “AT” string.";
-        case ERR_UNKNOWN_CMD:          return "Unknown command.";
-        case ERR_LEN_MISMATCH:         return "The data to be sent does not match the actual length";
-        case ERR_TX_OVER:              return "TX is over times.";
-        case ERR_CRC:                  return "CRC error.";
-        case ERR_TX_EXCEED:            return "TX data exceeds 240bytes.";
-        case ERR_FAIL_WRITE_FLASH:     return "Failed to write flash memory.";
-        case ERR_UNKNOWN:              return "Unknown failure.";
-        case ERR_TX_INCOMPLETE:        return "Last TX was not complete";
-        case ERR_PREAMBLE_NOT_ALLOWED: return "Preamble value is not allowed.";
-        case ERR_RX_FAIL:              return "RX failed, Header error.";
-        case ERR_PS_FAIL:              return "The time setting value of the “Smart receiving power saving mode” is not allowed.";
-        default:                       return "Unknown error code.";
-    }
-}
+    *resp = NULL;
+    *err = NULL;
 
-bool radio_get_status(char *buf, size_t buf_len, RadioStatusID_t cmd, const char **err) {
-    // to get the prefix skip the first two chars and then append '=' to the end. 
-    const char *command = AT_cmds[cmd];
-    uart_write_bytes(RADIO_UART_PORT, command, strlen(command));
-    char reply[64];
-    int len = uart_read_bytes(RADIO_UART_PORT, (uint8_t *)reply, sizeof(reply) - 1, pdMS_TO_TICKS(500));
-    reply[len > 0 ? len : 0] = '\0';
-    
-    char response_prefix[16];
-    size_t j = 0; 
-    for(size_t i = 2; command[i] != '\0'; i++){
-        if(strchr("?\r\n", command[i]) == NULL){
-            response_prefix[j++] = command[i];
+    if (info->name[0] == '\0') {
+        len = snprintf(command, sizeof(command), "AT\r\n");
+    } else if (args) {
+        if (!info->set_fmt) {
+            *err = "Command takes no arguments.";
+            return;
         }
-    }
-    response_prefix[j++] = '=';
-    response_prefix[j] = '\0';
-    
-    buf[0] = '\0';
+        len = snprintf(command, sizeof(command), "AT+%s=", info->name);
 
-    // AT guide shows AT+NETWORKID? replying +NETWORK=
-    const char *match; 
-    if (cmd == RADIO_STATUS_NETWORK_ID){
-        match = "+NETWORK=";
-    }else{
-        match = response_prefix;
+        va_list args;
+        va_start(args, cmd);
+        int n = vsnprintf(command + len, sizeof(command) - len, info->set_fmt, args);
+        va_end(args);
+
+        if (n < 0 || len + n + 2 > (int)sizeof(command)) {
+            *err = "Command too long.";
+            return;
+        }
+        len += n;
+        command[len++] = '\r';
+        command[len++] = '\n';
+    } else {
+        len = snprintf(command, sizeof(command), "AT+%s?\r\n", info->name);
     }
 
-    char *value = strstr(reply, match);
+    if (expect_ok) {
+        snprintf(prefix, sizeof(prefix), "+OK");
+    } else if (cmd == AT_NETID) {
+        // AT guide shows AT+NETWORKID? replying +NETWORK=
+        snprintf(prefix, sizeof(prefix), "+NETWORK=");
+    } else {
+        snprintf(prefix, sizeof(prefix), "+%s=", info->name);
+    }
+
+    uart_write_bytes(RADIO_UART_PORT, command, len);
+    int rx_len = uart_read_bytes(RADIO_UART_PORT, (uint8_t *)reply, sizeof(reply) - 1, pdMS_TO_TICKS(500));
+    reply[rx_len > 0 ? rx_len : 0] = '\0';
+
+    char *value = strstr(reply, prefix);
     if (!value) {
         *err = error_check(reply);
-        return false;
+        return;
     }
-    value += strlen(match);
+    if (!expect_ok) {
+        value += strlen(prefix);
+    }
 
     // no line ending then the reply got cut off
     char *end = strpbrk(value, "\r\n");
     if (!end) {
         *err = "Incomplete response.";
-        return false;
+        return;
     }
     *end = '\0';
-
-    strncpy(buf, value, buf_len - 1);
-    buf[buf_len - 1] = '\0';
-    return true;
+    *resp = value;
 }
 
-bool radio_set_default(const char **err){
+void radio_set_default(const char **err){
     const char *cmd = "AT+FACTORY\r\n";
 
     uart_write_bytes(RADIO_UART_PORT, cmd, strlen(cmd));
@@ -149,9 +166,7 @@ bool radio_set_default(const char **err){
 
     if (!resp_exists) {
         *err = error_check(response);
-        return false;
     }
-    return true;
 }
 
 bool radio_reset() {

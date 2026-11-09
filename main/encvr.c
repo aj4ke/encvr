@@ -1,56 +1,63 @@
-#include <stdio.h>
+#include <stdbool.h>
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "button.h"
-#include "display.h"
-#include "pot.h"
 #include "radio.h"
 
+static const char *TAG = "test";
+
 void vATaskFunction(void *pvParameters){
-    display_init();
-    display_show_splash();
     radio_init();
-    button_init();
-    pot_init();
 
-    const char *default_err = NULL;
-    const char *band_err = NULL;
+    const char *resp = NULL;
+    const char *err = NULL;
 
-    bool default_ok = radio_set_default(&default_err);
     bool reset_ok = radio_reset();
-    char band[32];
+    ESP_LOGI(TAG, "Reset: %s", reset_ok ? "OK" : "No +READY");
 
-    radio_get_status(band, sizeof(band), RADIO_STATUS_FREQUENCY, &band_err);
+    err = NULL;
+    radio_set_default(&err);
+    ESP_LOGI(TAG, "Default: %s", err ? err : "OK");
 
-    char status_text[128];
-    snprintf(status_text, sizeof(status_text), "Default: %s\nReset: %s\nBand: %s",
-        default_ok ? "OK" : default_err,
-        reset_ok ? "OK" : "err",
-        band[0] ? band : band_err
-        );
+    radio_send_cmd(&resp, &err, false, AT_TEST);
+    ESP_LOGI(TAG, "Test: %s", err ? err : resp);
 
-    char screen_text[sizeof(status_text) + 16];
-    int last_index = -1;
-    display_hide_splash();
+    radio_send_cmd(&resp, &err, true, AT_ADDRESS, 120);
+    ESP_LOGI(TAG, "Set addr: %s", err ? err : resp);
 
-    for(;;){
-        bool interrupt = button_press();
-        if (interrupt) {
-            display_text("1");
-            vTaskDelay(pdMS_TO_TICKS(500));
-            last_index = -1;
-        }
+    radio_send_cmd(&resp, &err, true, AT_NETID, 14);
+    ESP_LOGI(TAG, "Set netid: %s", err ? err : resp);
 
-        int index = pot_get_index(5);
-        if (index != last_index) {
-            snprintf(screen_text, sizeof(screen_text), "%s\nPot: %d", status_text, index);
-            display_text(screen_text);
-            last_index = index;
-        }
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    radio_send_cmd(&resp, &err, true, AT_PARAMETER, 10, 9, 3, 12);
+    ESP_LOGI(TAG, "Set param: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, true, AT_CRFOP, 14);
+    ESP_LOGI(TAG, "Set power: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, false, AT_ADDRESS);
+    ESP_LOGI(TAG, "Addr: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, false, AT_NETID); // broken, netID query returning unknown error for some reason
+    ESP_LOGI(TAG, "NetID: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, false, AT_PARAMETER);
+    ESP_LOGI(TAG, "Param: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, false, AT_CRFOP);
+    ESP_LOGI(TAG, "Power: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, false, AT_BAND);
+    ESP_LOGI(TAG, "Band: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, false, AT_UID);
+    ESP_LOGI(TAG, "UID: %s", err ? err : resp);
+
+    radio_send_cmd(&resp, &err, false, AT_VER);
+    ESP_LOGI(TAG, "Ver: %s", err ? err : resp);
+
+    vTaskDelete(NULL);
 }
 
 void app_main(void) {
-    xTaskCreate(vATaskFunction, "button_task", 4096, NULL, 5, NULL);
+    xTaskCreate(vATaskFunction, "radio_test", 4096, NULL, 5, NULL);
 }
